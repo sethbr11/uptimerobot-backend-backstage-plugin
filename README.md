@@ -198,8 +198,6 @@ Unless noted, routes expect a **logged-in user** (Backstage **`httpAuth`**) and 
 | **DELETE** | `/stats-cache/daily-uptime` | User + **`uptimerobot.cache.reset`** | Clears **all** daily uptime DB rows and in-memory entity caches. |
 | **DELETE** | `/entity/:kind/:namespace/:name/daily-uptime-cache` | User + **catalog** read **and** **`uptimerobot.cache.reset`** | Clears persisted daily uptime rows **for that entity** and in-memory entity caches. |
 
-> **Note:** There is **no** `POST /entity` route in current versions; clients should use **`GET`** with path parameters as above.
-
 ---
 
 ## Permissions
