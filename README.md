@@ -1,8 +1,8 @@
-# `@backstage-community/plugin-uptimerobot-backend`
+# `@sethbr11/plugin-uptimerobot-backend`
 
 **UNOFFICIAL Backstage backend plugin that keeps your UptimeRobot API key on the server and serves catalog-scoped monitor stats over HTTP.**
 
-[![npm](https://img.shields.io/npm/v/@backstage-community/plugin-uptimerobot-backend?style=flat-square&logo=npm&label=npm)](https://www.npmjs.com/package/@backstage-community/plugin-uptimerobot-backend)
+[![npm](https://img.shields.io/npm/v/@sethbr11/plugin-uptimerobot-backend?style=flat-square&logo=npm&label=npm)](https://www.npmjs.com/package/@sethbr11/plugin-uptimerobot-backend)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](https://opensource.org/licenses/Apache-2.0)
 [![Backstage](https://img.shields.io/badge/Backstage-backend%20plugin-36B37E?style=flat-square&logo=backstage)](https://backstage.io)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -21,7 +21,7 @@ It:
 - Optionally **persists daily uptime buckets** in the Backstage database for fewer repeat API calls
 - Integrates with the **Backstage permission framework** for cache admin routes
 
-Pair the backend with the frontend package **[`@backstage-community/plugin-uptimerobot`](../uptimerobot/README.md)** (or consume the HTTP API from your own UI).
+Pair the backend with the frontend package **[`@sethbr11/plugin-uptimerobot`](https://www.npmjs.com/package/@sethbr11/plugin-uptimerobot)** (or consume the HTTP API from your own UI).
 
 ---
 
@@ -47,14 +47,14 @@ Pair the backend with the frontend package **[`@backstage-community/plugin-uptim
 From your Backstage **backend** package (often `packages/backend`):
 
 ```bash
-yarn add @backstage-community/plugin-uptimerobot-backend
+yarn add @sethbr11/plugin-uptimerobot-backend
 ```
 
 ### 2. Register the plugin
 
 ```ts
 // packages/backend/src/index.ts
-backend.add(import('@backstage-community/plugin-uptimerobot-backend'));
+backend.add(import('@sethbr11/plugin-uptimerobot-backend'));
 ```
 
 ### 3. Configure `app-config.yaml`
@@ -159,7 +159,7 @@ Constants for use in custom tooling or docs:
 import {
   UPTIMEROBOT_DEFAULT_ENTITY_ANNOTATION,
   UPTIMEROBOT_MONITOR_URL_ANNOTATION,
-} from '@backstage-community/plugin-uptimerobot-backend';
+} from '@sethbr11/plugin-uptimerobot-backend';
 ```
 
 ### Optional card link URL
@@ -218,7 +218,7 @@ import {
   uptimerobotCacheReadPermission,
   uptimerobotCacheResetPermission,
   uptimerobotPermissions,
-} from '@backstage-community/plugin-uptimerobot-backend';
+} from '@sethbr11/plugin-uptimerobot-backend';
 ```
 
 If you run the **allow-all** permission policy in development, no extra rules are required.

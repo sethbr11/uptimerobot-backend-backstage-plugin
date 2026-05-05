@@ -1,5 +1,5 @@
 /*
- * Configuration schema for `@backstage-community/plugin-uptimerobot-backend`.
+ * Configuration schema for `@sethbr11/plugin-uptimerobot-backend`.
  * Merged at `backstage-cli config:check` / startup when the plugin is installed.
  */
 export interface Config {

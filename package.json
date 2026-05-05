@@ -1,5 +1,5 @@
 {
-  "name": "@backstage-community/plugin-uptimerobot-backend",
+  "name": "@sethbr11/plugin-uptimerobot-backend",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "description": "Backstage backend plugin for UptimeRobot monitor stats on catalog entities",
@@ -19,8 +19,8 @@
     "role": "backend-plugin",
     "pluginId": "uptimerobot",
     "pluginPackages": [
-      "@backstage-community/plugin-uptimerobot",
-      "@backstage-community/plugin-uptimerobot-backend"
+      "@sethbr11/plugin-uptimerobot",
+      "@sethbr11/plugin-uptimerobot-backend"
     ],
     "features": {
       ".": "@backstage/BackendFeature"
