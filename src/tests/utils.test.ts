@@ -70,7 +70,7 @@ describe('getUptimeRatio', () => {
   it('prefers uptime then overallUptime', () => {
     expect(getUptimeRatio({ uptime: 99 } as Parameters<typeof getUptimeRatio>[0])).toBe(99);
     expect(
-      getUptimeRatio({ overallUptime: 88 } as Parameters<typeof getUptimeRatio>[0]),
+      getUptimeRatio({ overallUptime: 88 } as unknown as Parameters<typeof getUptimeRatio>[0]),
     ).toBe(88);
   });
 });
@@ -110,7 +110,7 @@ describe('toBasicIncident', () => {
       startedAt: '2026-01-02T00:00:00Z',
       duration: 120,
       reason: 'conn reset',
-    } as Incident;
+    } as unknown as Incident;
 
     expect(toBasicIncident(incident)).toEqual({
       id: '9',
@@ -124,7 +124,7 @@ describe('toBasicIncident', () => {
 
   it('defaults type and startedAt when missing', () => {
     jest.useFakeTimers({ now: new Date('2026-01-05T12:00:00.000Z') });
-    const incident = { id: 1 } as Incident;
+    const incident = { id: 1 } as unknown as Incident;
     const out = toBasicIncident(incident);
     expect(out.type).toBe('Incident');
     expect(out.startedAt).toBe('2026-01-05T12:00:00.000Z');

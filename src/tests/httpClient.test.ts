@@ -1,5 +1,5 @@
 import { ServiceUnavailableError } from '@backstage/errors';
-import { callUptimeRobot, UptimeRobotHttpError } from '../services/httpClient';
+import { callUptimeRobot } from '../services/httpClient';
 
 describe('callUptimeRobot', () => {
   it('returns operation result when it resolves first', async () => {
