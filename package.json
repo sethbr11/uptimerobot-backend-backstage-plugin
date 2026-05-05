@@ -35,7 +35,8 @@
     "test:coverage": "backstage-cli package test --all --ci --watchAll=false --coverage",
     "clean": "backstage-cli package clean",
     "prepack": "backstage-cli package prepack",
-    "postpack": "backstage-cli package postpack"
+    "postpack": "backstage-cli package postpack",
+    "postpublish": "git tag v$npm_package_version && git push origin --tags"
   },
   "dependencies": {
     "@backstage/backend-defaults": "^0.17.0",
