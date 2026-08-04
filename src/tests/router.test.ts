@@ -207,6 +207,25 @@ describe('createRouter', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 403 when entity cache reset permission is denied', async () => {
+    const permissions = {
+      authorize: jest.fn().mockImplementation(async requests =>
+        requests.map((req: { permission: { name: string } }) => ({
+          result:
+            req.permission.name === 'uptimerobot.cache.reset-entity'
+              ? AuthorizeResult.DENY
+              : AuthorizeResult.ALLOW,
+        })),
+      ),
+    } as unknown as PermissionsService;
+    const { app } = await mountTestApp({ permissions });
+    const res = await request(app).delete(
+      '/entity/component/default/my-service/daily-uptime-cache',
+    );
+    expect(res.status).toBe(403);
+    expect(res.body.message).toMatch(/reset UptimeRobot cache for catalog entity/);
+  });
+
   it('returns 503 from health when upstream reports error', async () => {
     const { app, uptimeRobot } = await mountTestApp({
       uptimeRobot: {

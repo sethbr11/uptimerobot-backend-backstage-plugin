@@ -5,7 +5,11 @@ import { catalogEntityReadPermission } from '@backstage/plugin-catalog-common/al
 import { z } from 'zod/v3';
 import express from 'express';
 import Router from 'express-promise-router';
-import { uptimerobotCacheReadPermission, uptimerobotCacheResetPermission } from './permissions';
+import {
+  uptimerobotCacheReadPermission,
+  uptimerobotCacheResetEntityPermission,
+  uptimerobotCacheResetPermission,
+} from './permissions';
 import { UptimeRobotService } from './services/UptimeRobotService';
 
 
@@ -295,7 +299,7 @@ export async function createRouter({ httpAuth, permissions, uptimeRobot }: {
     // Create the entity reference
     const entityRef = entityRefFromParams(parsed.data);
     const credentials = await ensureCatalogEntityRead(req, entityRef);
-    await ensureCacheReset(req);
+    await ensureCacheResetEntity(req, entityRef);
     const result = await uptimeRobot.resetDailyUptimeCacheForEntity(entityRef, {
       credentials,
     });
@@ -376,7 +380,7 @@ export async function createRouter({ httpAuth, permissions, uptimeRobot }: {
     return credentials;
   }
 
-  /** Ensures the cache reset permission is granted.
+  /** Ensures the cache reset-all permission is granted.
    * 
    * @param req - The request object.
    * @returns The credentials.
@@ -389,6 +393,26 @@ export async function createRouter({ httpAuth, permissions, uptimeRobot }: {
     );
     if (result !== AuthorizeResult.ALLOW) {
       throw new NotAllowedError('Not allowed to reset UptimeRobot caches');
+    }
+    return credentials;
+  }
+
+  /** Ensures the per-entity cache reset permission is granted.
+   *
+   * @param req - The request object.
+   * @param entityRef - Catalog entity resource ref for the permission check.
+   * @returns The credentials.
+   */
+  async function ensureCacheResetEntity(req: express.Request, entityRef: string) {
+    const credentials = await userCredentials(req);
+    const [{ result }] = await permissions.authorize(
+      [{ permission: uptimerobotCacheResetEntityPermission, resourceRef: entityRef }],
+      { credentials },
+    );
+    if (result !== AuthorizeResult.ALLOW) {
+      throw new NotAllowedError(
+        `Not allowed to reset UptimeRobot cache for catalog entity ${entityRef}`,
+      );
     }
     return credentials;
   }

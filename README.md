@@ -197,7 +197,7 @@ Unless noted, routes expect a **logged-in user** (Backstage **`httpAuth`**) and 
 | **GET** | `/entity/:kind/:namespace/:name/incidents` | User + **catalog** read | **Incidents** for the monitor (default lookback **90 days**; see [`UptimeRobotService`](./src/services/UptimeRobotService.ts)). |
 | **GET** | `/stats-cache/daily-uptime` | User + **`uptimerobot.cache.read`** | Aggregate stats for the persisted **daily uptime** cache (record counts, date range). |
 | **DELETE** | `/stats-cache/daily-uptime` | User + **`uptimerobot.cache.reset`** | Clears **all** daily uptime DB rows and in-memory entity caches. |
-| **DELETE** | `/entity/:kind/:namespace/:name/daily-uptime-cache` | User + **catalog** read **and** **`uptimerobot.cache.reset`** | Clears persisted daily uptime rows **for that entity** and that entity’s in-memory caches. |
+| **DELETE** | `/entity/:kind/:namespace/:name/daily-uptime-cache` | User + **catalog** read **and** **`uptimerobot.cache.reset-entity`** (catalog-entity resource) | Clears persisted daily uptime rows **for that entity** and that entity’s in-memory caches. |
 
 ---
 
@@ -208,7 +208,8 @@ The plugin registers the following permission resources (for `@backstage/plugin-
 | Permission | Name | Used on |
 |------------|------|---------|
 | **Read cache stats** | `uptimerobot.cache.read` | `GET /stats-cache/daily-uptime` |
-| **Reset caches** | `uptimerobot.cache.reset` | `DELETE /stats-cache/daily-uptime`, `DELETE /entity/.../daily-uptime-cache` |
+| **Reset all caches** | `uptimerobot.cache.reset` | `DELETE /stats-cache/daily-uptime` |
+| **Reset entity cache** | `uptimerobot.cache.reset-entity` | `DELETE /entity/.../daily-uptime-cache` (resource type `catalog-entity`) |
 
 **Entity stats routes** additionally require the standard **catalog entity read** permission for the resolved entity ref (same model as other catalog-backed features).
 
@@ -218,11 +219,45 @@ Import helpers when authoring policies:
 import {
   uptimerobotCacheReadPermission,
   uptimerobotCacheResetPermission,
+  uptimerobotCacheResetEntityPermission,
   uptimerobotPermissions,
 } from '@sethbr11/plugin-uptimerobot-backend';
 ```
 
-If you run the **allow-all** permission policy in development, no extra rules are required.
+Example policy shape (DevOps may reset all / any entity; others may reset owned entities):
+
+```ts
+import { AuthorizeResult, isPermission } from '@backstage/plugin-permission-common';
+import {
+  createCatalogConditionalDecision,
+  catalogConditions,
+} from '@backstage/plugin-catalog-backend/alpha';
+import {
+  uptimerobotCacheResetPermission,
+  uptimerobotCacheResetEntityPermission,
+} from '@sethbr11/plugin-uptimerobot-backend';
+
+// inside PermissionPolicy.handle:
+if (isPermission(request.permission, uptimerobotCacheResetPermission)) {
+  return isDevops(user)
+    ? { result: AuthorizeResult.ALLOW }
+    : { result: AuthorizeResult.DENY };
+}
+
+if (isPermission(request.permission, uptimerobotCacheResetEntityPermission)) {
+  if (isDevops(user)) {
+    return { result: AuthorizeResult.ALLOW };
+  }
+  return createCatalogConditionalDecision(
+    request.permission,
+    catalogConditions.isEntityOwner({
+      claims: user?.info.ownershipEntityRefs ?? [],
+    }),
+  );
+}
+```
+
+If you run the **allow-all** permission policy in development, no extra rules are required — gate the settings UI from the frontend (see the frontend plugin README).
 
 ## Security model
 
@@ -269,7 +304,7 @@ Published **`main`** / **`types`** point at the built **`dist/`** output. Source
 | Export | Description |
 |--------|-------------|
 | **default** | `uptimerobotBackendPlugin` — `backend.add(...)` entrypoint. |
-| **`uptimerobotCacheReadPermission`**, **`uptimerobotCacheResetPermission`**, **`uptimerobotPermissions`** | Permission definitions. |
+| **`uptimerobotCacheReadPermission`**, **`uptimerobotCacheResetPermission`**, **`uptimerobotCacheResetEntityPermission`**, **`uptimerobotPermissions`** | Permission definitions. |
 | **`UPTIMEROBOT_DEFAULT_ENTITY_ANNOTATION`**, **`UPTIMEROBOT_MONITOR_URL_ANNOTATION`** | Default annotation keys. |
 | **Types** | `DailyUptime`, `GraphDisplay`, `BasicIncident`, `MonitorStats`, `MonitorSummaryStats`, `ResponseTimeChart`, `ResponseTimePoint` — JSON shapes returned by the service / API. |
 

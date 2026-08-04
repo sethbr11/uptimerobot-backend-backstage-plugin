@@ -6,6 +6,7 @@ export { uptimerobotBackendPlugin as default } from './plugin';
 export {
   uptimerobotCacheReadPermission,
   uptimerobotCacheResetPermission,
+  uptimerobotCacheResetEntityPermission,
   uptimerobotPermissions,
 } from './permissions';
 export type {
