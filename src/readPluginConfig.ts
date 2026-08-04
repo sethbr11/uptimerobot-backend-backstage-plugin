@@ -17,6 +17,10 @@ const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_HTTP_TIMEOUT_MS = 45_000;
 const DEFAULT_MONITOR_LIST_PAGE_LIMIT = 50;
 const DEFAULT_MONITOR_LIST_MAX_PAGES = 80;
+const MAX_CACHE_TTL_SECONDS = 86_400;
+const MAX_HTTP_TIMEOUT_SECONDS = 120;
+const MAX_MONITOR_LIST_PAGE_LIMIT = 100;
+const MAX_MONITOR_LIST_MAX_PAGES = 100;
 
 /** Single catalog annotation: monitor selector (see annotationDefaults)
  * 
@@ -85,17 +89,27 @@ export function readPluginRuntimeConfig(
 ): PluginRuntimeConfig {
   const graphs = readGraphRuntimeConfig(config, logger);
 
-  const cacheTtlSeconds = readPositiveInt(
-    config,
-    'uptimerobot.cacheTtlSeconds',
-    DEFAULT_CACHE_TTL_MS / 1000,
+  const cacheTtlSeconds = clampPositiveInt(
+    readPositiveInt(
+      config,
+      'uptimerobot.cacheTtlSeconds',
+      DEFAULT_CACHE_TTL_MS / 1000,
+      logger,
+      'uptimerobot.cacheTtlSeconds',
+    ),
+    MAX_CACHE_TTL_SECONDS,
     logger,
     'uptimerobot.cacheTtlSeconds',
   );
-  const httpTimeoutSeconds = readPositiveInt(
-    config,
-    'uptimerobot.httpTimeoutSeconds',
-    DEFAULT_HTTP_TIMEOUT_MS / 1000,
+  const httpTimeoutSeconds = clampPositiveInt(
+    readPositiveInt(
+      config,
+      'uptimerobot.httpTimeoutSeconds',
+      DEFAULT_HTTP_TIMEOUT_MS / 1000,
+      logger,
+      'uptimerobot.httpTimeoutSeconds',
+    ),
+    MAX_HTTP_TIMEOUT_SECONDS,
     logger,
     'uptimerobot.httpTimeoutSeconds',
   );
@@ -110,17 +124,27 @@ export function readPluginRuntimeConfig(
     graphs,
     cacheTtlMs: cacheTtlSeconds * 1000,
     httpTimeoutMs: httpTimeoutSeconds * 1000,
-    monitorListPageLimit: readPositiveInt(
-      config,
-      'uptimerobot.monitors.listPageLimit',
-      DEFAULT_MONITOR_LIST_PAGE_LIMIT,
+    monitorListPageLimit: clampPositiveInt(
+      readPositiveInt(
+        config,
+        'uptimerobot.monitors.listPageLimit',
+        DEFAULT_MONITOR_LIST_PAGE_LIMIT,
+        logger,
+        'uptimerobot.monitors.listPageLimit',
+      ),
+      MAX_MONITOR_LIST_PAGE_LIMIT,
       logger,
       'uptimerobot.monitors.listPageLimit',
     ),
-    monitorListMaxPages: readPositiveInt(
-      config,
-      'uptimerobot.monitors.listMaxPages',
-      DEFAULT_MONITOR_LIST_MAX_PAGES,
+    monitorListMaxPages: clampPositiveInt(
+      readPositiveInt(
+        config,
+        'uptimerobot.monitors.listMaxPages',
+        DEFAULT_MONITOR_LIST_MAX_PAGES,
+        logger,
+        'uptimerobot.monitors.listMaxPages',
+      ),
+      MAX_MONITOR_LIST_MAX_PAGES,
       logger,
       'uptimerobot.monitors.listMaxPages',
     ),
@@ -277,4 +301,16 @@ function readPositiveInt(
     return fallback;
   }
   return raw;
+}
+
+/** Clamp a positive config integer to a safe maximum. */
+function clampPositiveInt(
+  value: number,
+  max: number,
+  logger: LoggerService,
+  label: string,
+): number {
+  if (value <= max) return value;
+  logger.warn(`${label} above safe maximum; clamping`, { raw: value, max, used: max });
+  return max;
 }

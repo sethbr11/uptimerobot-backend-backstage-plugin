@@ -58,10 +58,9 @@ export async function callUptimeRobot<T>(
 //              HELPER UTILITIES             //
 // ////////////////////////////////////////////
 
-/** Map a UptimeRobot client error to a UptimeRobot HTTP error
- * 
- * @param error - The UptimeRobot client error
- * @returns The UptimeRobot HTTP error
+/**
+ * Map upstream/client failures to stable plugin errors.
+ * Do not forward raw UptimeRobot response bodies to API clients.
  */
 function mapUptimeRobotClientError(error: unknown): never {
   const msg = error instanceof Error ? error.message : String(error);
@@ -70,30 +69,27 @@ function mapUptimeRobotClientError(error: unknown): never {
   const apiMatch = /^API Error \((\d+)\):\s*(.*)$/s.exec(msg);
   if (apiMatch) {
     const status = Number(apiMatch[1]);
-    const detail = (apiMatch[2] || '').trim();
 
-    // 429: Rate limit reached
+    // 429: Rate limit reached — keep a distinct type for soft-fail paths
     if (status === 429) {
-      throw new UptimeRobotHttpError(429,
-        `UptimeRobot rate limit reached (free plans allow about 10 API calls per minute, while the pro plan allows up to 5000).${
-          detail ? ` ${detail}` : ''
-        } Try again in about a minute.`,
+      throw new UptimeRobotHttpError(
+        429,
+        'UptimeRobot rate limit reached. Try again in about a minute.',
       );
     }
 
-    // 500: Internal server error
-    throw new ServiceUnavailableError(
-      `UptimeRobot request failed: ${status}${detail ? ` — ${detail}` : ''}`,
-    );
+    throw new ServiceUnavailableError(`UptimeRobot request failed (${status}).`);
   }
 
   // Test if the error is a network error
   if (msg.startsWith('Network Error:') || msg.startsWith('Multipart API Error:')) {
+    throw new ServiceUnavailableError('UptimeRobot request failed (network error).');
+  }
+
+  if (msg.includes('timed out after')) {
     throw new ServiceUnavailableError(msg);
   }
 
-  // Throw the error as a service unavailable error
-  throw error instanceof Error
-    ? new ServiceUnavailableError(msg)
-    : new ServiceUnavailableError(String(error));
+  // Throw a generic service unavailable error
+  throw new ServiceUnavailableError('UptimeRobot request failed.');
 }

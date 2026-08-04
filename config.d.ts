@@ -4,7 +4,10 @@
  */
 export interface Config {
   uptimerobot?: {
-    /** UptimeRobot read-only API key (v3). */
+    /**
+     * UptimeRobot read-only API key (v3).
+     * @visibility secret
+     */
     apiKey?: string;
 
     /** When true, logs extra plugin diagnostics at `info` level (default: false). */
@@ -36,16 +39,19 @@ export interface Config {
       listMaxPages?: number;
     };
 
-    /** Optional graphs — omit a key or use `enabled: false` to turn it off (defaults: both off). */
+    /**
+     * Optional graphs — omit a key or use `enabled: false` / boolean `false` to turn off
+     * (defaults: both off). Boolean shorthand `true` enables with the documented default days.
+     */
     graphs?: {
       /**
        * Daily uptime pills: `days` UTC calendar days (default 30, max 90). When enabled, one `stats/uptime` per day.
        */
-      dailyUptime?: { enabled?: boolean; days?: number };
+      dailyUptime?: boolean | { enabled?: boolean; days?: number };
       /**
        * Response-time chart: single `stats/response-time/all` over `days` (default 90, max 90). Not one call per day.
        */
-      responseTime?: { enabled?: boolean; days?: number };
+      responseTime?: boolean | { enabled?: boolean; days?: number };
     };
   };
 }

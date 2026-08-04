@@ -1,7 +1,7 @@
 import type { DatabaseService } from '@backstage/backend-plugin-api';
 import type { DailyUptime } from '../types';
 
-const TABLE_NAME = 'uptimerobot_daily_uptime';
+const TABLE_NAME = 'uptimerobot_entity_daily_uptime';
 const SOURCE_VERSION = 'v1';
 
 // ////////////////////////////////////////////
@@ -102,7 +102,11 @@ export class DailyUptimeStore {
     // Get the daily uptime from the database
     const knex = await this.#database.getClient();
     const rows = await knex<DailyUptimeDbRow>(TABLE_NAME)
-      .where({ monitor_id: String(identity.monitorId), source_version: SOURCE_VERSION })
+      .where({
+        entity_ref: identity.entityRef,
+        monitor_id: String(identity.monitorId),
+        source_version: SOURCE_VERSION,
+      })
       .whereIn('date', dates);
 
     // Return the daily uptime as a map of date to daily uptime
@@ -142,10 +146,10 @@ export class DailyUptimeStore {
         error: day.error ?? null,
         source_version: SOURCE_VERSION,
       })
-      .onConflict(['monitor_id', 'date'])
+      .onConflict(['entity_ref', 'date'])
       .merge({
+        monitor_id: String(identity.monitorId),
         monitor_name: identity.monitorName,
-        entity_ref: identity.entityRef,
         uptime_ratio: day.uptimeRatio ?? null,
         fetched_at: new Date().toISOString(),
         error: day.error ?? null,
@@ -153,17 +157,16 @@ export class DailyUptimeStore {
       });
   }
 
-  /** Delete the daily uptime for a given monitor ID and oldest date
+  /** Delete the daily uptime older than a given date for one entity
    * 
-   * @param monitorId - The monitor ID to delete the daily uptime for
-   * @param oldestDate - The oldest date to delete the daily uptime for
-   * @returns The daily uptime for the given monitor ID and oldest date
+   * @param entityRef - The entity reference
+   * @param oldestDate - The oldest date to keep (exclusive lower bound)
    */
-  async deleteOlderThan(monitorId: string | number, oldestDate: string): Promise<void> {
+  async deleteOlderThan(entityRef: string, oldestDate: string): Promise<void> {
     await this.#ensureInitialized();
     const knex = await this.#database.getClient();
     await knex<DailyUptimeDbRow>(TABLE_NAME)
-      .where({ monitor_id: String(monitorId) })
+      .where({ entity_ref: entityRef })
       .andWhere('date', '<', oldestDate)
       .delete();
   }
@@ -256,7 +259,7 @@ export class DailyUptimeStore {
       table.string('fetched_at').notNullable();
       table.text('error').nullable();
       table.string('source_version').notNullable();
-      table.unique(['monitor_id', 'date']);
+      table.unique(['entity_ref', 'date']);
       table.index(['entity_ref', 'date']);
       table.index(['monitor_id', 'date']);
     });

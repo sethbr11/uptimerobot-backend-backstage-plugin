@@ -8,6 +8,15 @@
     "uptimerobot",
     "monitoring"
   ],
+  "author": "Seth Brock",
+  "homepage": "https://github.com/sethbr11/uptimerobot-backend-backstage-plugin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sethbr11/uptimerobot-backend-backstage-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sethbr11/uptimerobot-backend-backstage-plugin/issues"
+  },
   "main": "dist/index.cjs.js",
   "types": "dist/index.d.ts",
   "publishConfig": {
@@ -35,11 +44,9 @@
     "test:coverage": "backstage-cli package test --all --ci --watchAll=false --coverage",
     "clean": "backstage-cli package clean",
     "prepack": "backstage-cli package prepack",
-    "postpack": "backstage-cli package postpack",
-    "postpublish": "git tag v$npm_package_version && git push origin --tags"
+    "postpack": "backstage-cli package postpack"
   },
   "dependencies": {
-    "@backstage/backend-defaults": "^0.17.0",
     "@backstage/backend-plugin-api": "^1.9.0",
     "@backstage/catalog-client": "^1.9.1",
     "@backstage/catalog-model": "^1.7.5",
@@ -55,6 +62,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@backstage/backend-defaults": "^0.17.0",
     "@backstage/backend-test-utils": "^1.11.2",
     "@backstage/cli": "^0.36.1",
     "@types/express": "^4.17.6",

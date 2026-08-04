@@ -119,7 +119,7 @@ export function createInMemoryDatabaseService() {
   let tableExists = false;
 
   const knex = ((tableName: string) => {
-    if (tableName !== 'uptimerobot_daily_uptime') {
+    if (tableName !== 'uptimerobot_entity_daily_uptime') {
       throw new Error(`Unexpected test table '${tableName}'`);
     }
     return new InMemoryQueryBuilder(rows);

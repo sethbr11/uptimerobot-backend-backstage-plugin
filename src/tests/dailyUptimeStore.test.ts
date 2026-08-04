@@ -29,7 +29,7 @@ describe('DailyUptimeStore', () => {
 
     await store.upsertDailyUptime(identity, { date: '2026-04-30', uptimeRatio: 99 });
     await store.upsertDailyUptime(identity, { date: '2026-05-01', uptimeRatio: 100 });
-    await store.deleteOlderThan(identity.monitorId, '2026-05-01');
+    await store.deleteOlderThan(identity.entityRef, '2026-05-01');
 
     const rows = await store.getDailyUptime(identity, ['2026-04-30', '2026-05-01']);
     expect(rows.has('2026-04-30')).toBe(false);
@@ -56,6 +56,28 @@ describe('DailyUptimeStore', () => {
     expect((await store.getStats()).records).toBe(1);
     expect(await store.resetAll()).toBe(1);
     expect((await store.getStats()).records).toBe(0);
+  });
+
+  it('keeps separate rows for entities that share a monitor id', async () => {
+    const { database } = createInMemoryDatabaseService();
+    const store = new DailyUptimeStore(database);
+    const shared = { monitorId: 123, monitorName: 'Shared' };
+
+    await store.upsertDailyUptime(
+      { ...shared, entityRef: 'component:default/a' },
+      { date: '2026-05-01', uptimeRatio: 99 },
+    );
+    await store.upsertDailyUptime(
+      { ...shared, entityRef: 'component:default/b' },
+      { date: '2026-05-01', uptimeRatio: 98 },
+    );
+
+    expect(await store.resetEntity('component:default/a')).toBe(1);
+    const bRows = await store.getDailyUptime(
+      { ...shared, entityRef: 'component:default/b' },
+      ['2026-05-01'],
+    );
+    expect(bRows.get('2026-05-01')?.uptimeRatio).toBe(98);
   });
 
   it('resetMonitor deletes only rows for that monitor', async () => {

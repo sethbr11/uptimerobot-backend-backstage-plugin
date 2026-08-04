@@ -122,4 +122,22 @@ describe('readPluginRuntimeConfig', () => {
     expect(r.monitorListMaxPages).toBe(80);
     expect(log.warn).toHaveBeenCalled();
   });
+
+  it('clamps oversized list and timeout settings', () => {
+    const log = logger();
+    const cfg = new ConfigReader({
+      uptimerobot: {
+        apiKey: 'k',
+        cacheTtlSeconds: 999_999,
+        httpTimeoutSeconds: 999,
+        monitors: { listPageLimit: 500, listMaxPages: 500 },
+      },
+    });
+    const r = readPluginRuntimeConfig(cfg, log);
+    expect(r.cacheTtlMs).toBe(86_400 * 1000);
+    expect(r.httpTimeoutMs).toBe(120_000);
+    expect(r.monitorListPageLimit).toBe(100);
+    expect(r.monitorListMaxPages).toBe(100);
+    expect(log.warn).toHaveBeenCalled();
+  });
 });

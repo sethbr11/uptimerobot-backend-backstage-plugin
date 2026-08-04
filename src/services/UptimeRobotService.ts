@@ -83,12 +83,26 @@ type DateRangeParams = {
 
 /** UptimeRobot service: catalog entity → v3 monitor + stats. */
 export class UptimeRobotService {
+  /** Minimum gap between forced `?refresh=true` loads for the same entity. */
+  static readonly #REFRESH_COOLDOWN_MS = 30_000;
+  /** Short TTL for negative monitor-name lookups (avoids repeated list walks). */
+  static readonly #MONITOR_MISS_TTL_MS = 60_000;
+
   readonly #runtime: PluginRuntimeConfig;
   readonly #logger: LoggerService;
   readonly #catalog: typeof catalogServiceRef.T;
   readonly #dailyUptimeStore: DailyUptimeStore;
   readonly #cache = new Map<string, { expiresAt: number; value: MonitorStats }>();
   readonly #summaryCache = new Map<string, { expiresAt: number; value: MonitorSummaryStats }>();
+  readonly #inflightStats = new Map<string, Promise<MonitorStats>>();
+  readonly #inflightSummary = new Map<string, Promise<MonitorSummaryStats>>();
+  readonly #inflightDaily = new Map<string, Promise<DailyUptime[]>>();
+  readonly #inflightMonitorByName = new Map<string, Promise<Monitor | undefined>>();
+  readonly #monitorByNameCache = new Map<
+    string,
+    { expiresAt: number; monitor: Monitor | undefined }
+  >();
+  readonly #lastForcedRefreshAt = new Map<string, number>();
   #v3?: UptimeRobotV3Client;
 
   /** The UptimeRobot service constructor. Only callable by the create method.
@@ -136,25 +150,30 @@ export class UptimeRobotService {
    * @returns The stats for the entity
    */
   async getStatsForEntity(entityRef: string, options: CommonOptions): Promise<MonitorStats> {
-    const { monitorName, monitor, entity } = await this.#getMonitorForEntity(entityRef, options);
-    const monitorUrlOverride = this.#resolveMonitorUrlFromEntity(entity);
-    const cached = this.#cache.get(entityRef);
-    if (!options.refresh && cached && cached.expiresAt > Date.now()) return cached.value;
+    const refresh = this.#consumeForcedRefresh(entityRef, options.refresh);
+    if (!refresh) {
+      const cached = this.#cache.get(entityRef);
+      if (cached && cached.expiresAt > Date.now()) return cached.value;
+    }
 
-    // Build the monitor stats
-    const stats = await this.#buildMonitorStats(
-      monitor,
-      { entityRef, monitorId: monitor.id, monitorName },
-      monitorUrlOverride,
-    );
+    return this.#coalesce(this.#inflightStats, `${entityRef}:${refresh ? 'r' : 'c'}`, async () => {
+      const { monitorName, monitor, entity } = await this.#getMonitorForEntity(entityRef, options);
+      const monitorUrlOverride = this.#resolveMonitorUrlFromEntity(entity);
 
-    // Cache the stats
-    this.#cache.set(entityRef, {
-      expiresAt: Date.now() + this.#runtime.cacheTtlMs,
-      value: stats,
+      const stats = await this.#buildMonitorStats(
+        monitor,
+        { entityRef, monitorId: monitor.id, monitorName },
+        monitorUrlOverride,
+        { refresh },
+      );
+
+      this.#cache.set(entityRef, {
+        expiresAt: Date.now() + this.#runtime.cacheTtlMs,
+        value: stats,
+      });
+
+      return stats;
     });
-
-    return stats;
   }
 
   /** Get the stats summary for an entity
@@ -164,21 +183,25 @@ export class UptimeRobotService {
    * @returns The stats summary for the entity
    */
   async getStatsSummaryForEntity(entityRef: string, options: CommonOptions): Promise<MonitorSummaryStats> {
-    const { monitor, entity } = await this.#getMonitorForEntity(entityRef, options);
-    const monitorUrlOverride = this.#resolveMonitorUrlFromEntity(entity);
-    const cached = this.#summaryCache.get(entityRef);
-    if (!options.refresh && cached && cached.expiresAt > Date.now()) return cached.value;
+    const refresh = this.#consumeForcedRefresh(entityRef, options.refresh);
+    if (!refresh) {
+      const cached = this.#summaryCache.get(entityRef);
+      if (cached && cached.expiresAt > Date.now()) return cached.value;
+    }
 
-    // Build the monitor summary stats
-    const summary = await this.#buildMonitorSummaryStats(monitor, monitorUrlOverride);
+    return this.#coalesce(this.#inflightSummary, `${entityRef}:${refresh ? 'r' : 'c'}`, async () => {
+      const { monitor, entity } = await this.#getMonitorForEntity(entityRef, options);
+      const monitorUrlOverride = this.#resolveMonitorUrlFromEntity(entity);
 
-    // Cache the summary stats
-    this.#summaryCache.set(entityRef, {
-      expiresAt: Date.now() + this.#runtime.cacheTtlMs,
-      value: summary,
+      const summary = await this.#buildMonitorSummaryStats(monitor, monitorUrlOverride);
+
+      this.#summaryCache.set(entityRef, {
+        expiresAt: Date.now() + this.#runtime.cacheTtlMs,
+        value: summary,
+      });
+
+      return summary;
     });
-
-    return summary;
   }
 
   /** Get the daily uptime for an entity
@@ -188,10 +211,14 @@ export class UptimeRobotService {
    * @returns The daily uptime for the entity
    */
   async getDailyUptimeForEntity(entityRef: string, options: CommonOptions): Promise<DailyUptime[]> {
-    const { monitor, monitorName } = await this.#getMonitorForEntity(entityRef, options);
-
-    // Build and return the daily uptime
-    return this.#buildDailyUptime({ entityRef, monitorId: monitor.id, monitorName });
+    const refresh = this.#consumeForcedRefresh(entityRef, options.refresh);
+    return this.#coalesce(this.#inflightDaily, `${entityRef}:${refresh ? 'r' : 'c'}`, async () => {
+      const { monitor, monitorName } = await this.#getMonitorForEntity(entityRef, options);
+      return this.#buildDailyUptime(
+        { entityRef, monitorId: monitor.id, monitorName },
+        { refresh },
+      );
+    });
   }
 
   /** Get the response time for an entity
@@ -233,6 +260,8 @@ export class UptimeRobotService {
     const deleted = await this.#dailyUptimeStore.resetAll();
     this.#cache.clear();
     this.#summaryCache.clear();
+    this.#monitorByNameCache.clear();
+    this.#lastForcedRefreshAt.clear();
     return { deleted };
   }
 
@@ -248,15 +277,15 @@ export class UptimeRobotService {
   ): Promise<{ deleted: number }> {
     await this.#getMonitorNameForEntity(entityRef, options);
     const deleted = await this.#dailyUptimeStore.resetEntity(entityRef);
-    this.#cache.clear();
-    this.#summaryCache.clear();
+    this.#cache.delete(entityRef);
+    this.#summaryCache.delete(entityRef);
     return { deleted };
   }
 
   /** Public health for `GET /api/uptimerobot/health`
    * 
-   * When an API key is configured, performs a minimal UptimeRobot API call; otherwise
-   * reports unconfigured OK.
+   * Local configuration probe only — does not call UptimeRobot (avoids quota burn and
+   * leaking upstream errors on an unauthenticated route).
    */
   async getPublicHealth(): Promise<PublicHealthResponse> {
     if (!this.#runtime.apiKey) {
@@ -267,16 +296,7 @@ export class UptimeRobotService {
         detail: 'uptimerobot.apiKey not configured',
       };
     }
-    try {
-      await callUptimeRobot(
-        () => this.#client().monitors.list({ limit: 1 }, true),
-        this.#runtime.httpTimeoutMs,
-      );
-      return { ok: true, status: 'ok', configured: true };
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      return { ok: false, status: 'error', configured: true, detail };
-    }
+    return { ok: true, status: 'ok', configured: true };
   }
 
   // ////////////////////////////////////////////
@@ -385,8 +405,30 @@ export class UptimeRobotService {
    * @returns The monitor
    */
   async #findMonitorByName(monitorName: string): Promise<Monitor | undefined> {
-    // Convert the monitor name to lowercase
     const lowerName = monitorName.toLocaleLowerCase();
+    const cached = this.#monitorByNameCache.get(lowerName);
+    if (cached && cached.expiresAt > Date.now()) return cached.monitor;
+
+    return this.#coalesce(this.#inflightMonitorByName, lowerName, async () => {
+      const fresh = this.#monitorByNameCache.get(lowerName);
+      if (fresh && fresh.expiresAt > Date.now()) return fresh.monitor;
+
+      const monitor = await this.#findMonitorByNameUncached(lowerName, monitorName);
+      this.#monitorByNameCache.set(lowerName, {
+        expiresAt:
+          Date.now() +
+          (monitor ? this.#runtime.cacheTtlMs : UptimeRobotService.#MONITOR_MISS_TTL_MS),
+        monitor,
+      });
+      return monitor;
+    });
+  }
+
+  /** Uncached monitor list walk by friendly name. */
+  async #findMonitorByNameUncached(
+    lowerName: string,
+    monitorName: string,
+  ): Promise<Monitor | undefined> {
     let cursor: number | undefined;
 
     // Loop through the pages of monitors
@@ -405,7 +447,35 @@ export class UptimeRobotService {
       cursor = nextCursor;
     }
 
-    return undefined; // No monitor found
+    return undefined;
+  }
+
+  /**
+   * Honor `?refresh=true` at most once per entity per cooldown window.
+   * Concurrent progressive fetches share one forced refresh.
+   */
+  #consumeForcedRefresh(entityRef: string, refresh?: boolean): boolean {
+    if (!refresh) return false;
+    const now = Date.now();
+    const last = this.#lastForcedRefreshAt.get(entityRef) ?? 0;
+    if (now - last < UptimeRobotService.#REFRESH_COOLDOWN_MS) return false;
+    this.#lastForcedRefreshAt.set(entityRef, now);
+    return true;
+  }
+
+  /** Deduplicate concurrent loads for the same cache key. */
+  async #coalesce<T>(
+    inflight: Map<string, Promise<T>>,
+    key: string,
+    load: () => Promise<T>,
+  ): Promise<T> {
+    const existing = inflight.get(key);
+    if (existing) return existing;
+    const promise = load().finally(() => {
+      inflight.delete(key);
+    });
+    inflight.set(key, promise);
+    return promise;
   }
 
   /** List monitors by name
@@ -443,10 +513,11 @@ export class UptimeRobotService {
     monitor: Monitor,
     identity: DailyUptimeCacheIdentity,
     monitorUrlOverride?: string,
+    options: { refresh?: boolean } = {},
   ): Promise<MonitorStats> {
     const [summary, dailyUptime, responseTime, incidents] = await Promise.all([
       this.#buildMonitorSummaryStats(monitor, monitorUrlOverride),
-      this.#buildDailyUptime(identity),
+      this.#buildDailyUptime(identity, options),
       this.#runtime.graphs.responseTime.enabled
         ? this.#getOptionalResponseTimeChart(monitor.id, new Date().toISOString(), true)
         : undefined,
@@ -511,7 +582,7 @@ export class UptimeRobotService {
       uptime: {
         last24Hours: last24Stats ? getUptimeRatio(last24Stats) : undefined,
         last7Days: last7Stats ? getUptimeRatio(last7Stats) : undefined,
-        last30Days: chartStats ? getUptimeRatio(chartStats) : undefined,
+        chartWindow: chartStats ? getUptimeRatio(chartStats) : undefined,
         last90Days: last90Stats ? getUptimeRatio(last90Stats) : undefined,
       },
       responseTime,
@@ -523,7 +594,10 @@ export class UptimeRobotService {
    * @param identity - The identity of the monitor
    * @returns The daily uptime
    */
-  async #buildDailyUptime(identity: DailyUptimeCacheIdentity): Promise<DailyUptime[]> {
+  async #buildDailyUptime(
+    identity: DailyUptimeCacheIdentity,
+    options: { refresh?: boolean } = {},
+  ): Promise<DailyUptime[]> {
     // Initialize the daily uptime array
     const dailyUptime: DailyUptime[] = [];
 
@@ -543,7 +617,7 @@ export class UptimeRobotService {
 
     // Keep rows for the full API max window even when the graph shows fewer days (config can change later).
     await this.#dailyUptimeStore.deleteOlderThan(
-      identity.monitorId,
+      identity.entityRef,
       retentionRanges[0]?.date ?? today,
     );
 
@@ -552,8 +626,9 @@ export class UptimeRobotService {
       // Get the cached day
       const cachedDay = cached.get(range.date);
 
-      // Check if the day is not today, cached, not in error, and has an uptime ratio
+      // Reuse persisted historical days unless the caller asked to refresh.
       if (
+        !options.refresh &&
         range.date !== today &&
         cachedDay &&
         cachedDay.error === undefined &&
@@ -594,10 +669,10 @@ export class UptimeRobotService {
           error: e instanceof Error ? e.message : String(e),
         });
 
-        // Upsert (update or insert) the day
+        // Upsert a stable placeholder — never persist raw upstream text
         await this.#dailyUptimeStore.upsertDailyUptime(identity, {
           date: range.date,
-          error: e instanceof Error ? e.message : String(e),
+          error: 'Failed to fetch daily uptime',
         });
 
         // Add the day to the daily uptime array

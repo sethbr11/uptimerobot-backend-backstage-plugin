@@ -353,11 +353,10 @@ describe('UptimeRobotService entity resolution and health', () => {
     expect(mockMonitorList).not.toHaveBeenCalled();
   });
 
-  it('getPublicHealth probes API when configured', async () => {
+  it('getPublicHealth reports configured without calling UptimeRobot', async () => {
     const config = new ConfigReader({ uptimerobot: { apiKey: 'k' } });
     const { database } = createInMemoryDatabaseService();
     const catalog = {} as Parameters<typeof UptimeRobotService.create>[0]['catalog'];
-    mockMonitorList.mockResolvedValue({ data: [{ id: 1 }], nextLink: null });
 
     const service = UptimeRobotService.create({ catalog, config, database, logger });
     await expect(service.getPublicHealth()).resolves.toEqual({
@@ -365,21 +364,7 @@ describe('UptimeRobotService entity resolution and health', () => {
       status: 'ok',
       configured: true,
     });
-  });
-
-  it('getPublicHealth returns error payload when probe fails', async () => {
-    const config = new ConfigReader({ uptimerobot: { apiKey: 'k' } });
-    const { database } = createInMemoryDatabaseService();
-    const catalog = {} as Parameters<typeof UptimeRobotService.create>[0]['catalog'];
-    mockMonitorList.mockRejectedValueOnce(new Error('network down'));
-
-    const service = UptimeRobotService.create({ catalog, config, database, logger });
-    await expect(service.getPublicHealth()).resolves.toEqual({
-      ok: false,
-      status: 'error',
-      configured: true,
-      detail: 'network down',
-    });
+    expect(mockMonitorList).not.toHaveBeenCalled();
   });
 
   it('caches getStatsSummaryForEntity when refresh is false', async () => {

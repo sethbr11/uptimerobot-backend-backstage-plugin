@@ -33,6 +33,7 @@ Pair the backend with the frontend package **[`@sethbr11/plugin-uptimerobot`](ht
 - [Catalog annotations](#catalog-annotations)
 - [HTTP API](#http-api)
 - [Permissions](#permissions)
+- [Security model](#security-model)
 - [Caching and database](#caching-and-database)
 - [Health check](#health-check)
 - [NPM package exports](#npm-package-exports)
@@ -73,11 +74,11 @@ All keys live under the root key **`uptimerobot`**. Types and JSDoc comments are
 |----------|------|---------|-------------|
 | **`uptimerobot.apiKey`** | `string` | _none_ | UptimeRobot **v3 read-only** API key. If omitted, entity stats routes return an error when invoked; [`GET /health`](#health-check) still returns `200` with `configured: false`. |
 | **`uptimerobot.debug`** | `boolean` | `false` | When `true`, emits extra diagnostics (e.g. lifecycle / startup hints) at **`info`** log level where applicable. |
-| **`uptimerobot.cacheTtlSeconds`** | `number` (positive integer) | `600` | **In-memory** TTL (seconds) for full **entity stats** and **summary** responses. Clients can bypass with **`?refresh=true`**. |
-| **`uptimerobot.httpTimeoutSeconds`** | `number` (positive integer) | `45` | Timeout (seconds) for each outbound HTTP call to `api.uptimerobot.com`. |
+| **`uptimerobot.cacheTtlSeconds`** | `number` (positive integer) | `600` | **In-memory** TTL (seconds) for full **entity stats** and **summary** responses. Checked **before** monitor list resolution. Max **86400**. Clients can bypass with **`?refresh=true`** (30s cooldown per entity). |
+| **`uptimerobot.httpTimeoutSeconds`** | `number` (positive integer) | `45` | Timeout (seconds) for each outbound HTTP call to `api.uptimerobot.com`. Max **120**. |
 | **`uptimerobot.catalog.entityAnnotation`** | `string` | `backstage.io/uptimerobot` | Catalog metadata annotation used to choose the monitor (or disable the integration). See [Catalog annotations](#catalog-annotations). |
-| **`uptimerobot.monitors.listPageLimit`** | `number` (positive integer) | `50` | Page size when listing monitors while **resolving by friendly name**. |
-| **`uptimerobot.monitors.listMaxPages`** | `number` (positive integer) | `80` | Maximum pages to walk when searching for a monitor by name. |
+| **`uptimerobot.monitors.listPageLimit`** | `number` (positive integer) | `50` | Page size when listing monitors while **resolving by friendly name**. Max **100**. |
+| **`uptimerobot.monitors.listMaxPages`** | `number` (positive integer) | `80` | Maximum pages to walk when searching for a monitor by name. Max **100**. |
 | **`uptimerobot.graphs`** | `object` | _see below_ | Optional **daily uptime** and **response time** graph settings. See [Graphs (`graphs`)](#graphs-graphs). |
 
 ### Graphs (`graphs`)
@@ -94,7 +95,7 @@ Each graph can be configured as a **boolean shorthand** or a **full object**.
 
 When enabled, the backend may issue **one UptimeRobot request per day** in the window (plus summary windows elsewhere). Cached historical days are reused; **today** is refreshed on each request unless served from the in-memory entity cache.
 
-**Database retention:** Rows in `uptimerobot_daily_uptime` older than the **90-day** UTC window are pruned on refresh, even if `days` is smaller, so operators can widen the graph later without having lost long history.
+**Database retention:** Rows in `uptimerobot_entity_daily_uptime` older than the **90-day** UTC window are pruned on refresh, even if `days` is smaller, so operators can widen the graph later without having lost long history.
 
 #### `uptimerobot.graphs.responseTime`
 
@@ -182,7 +183,7 @@ Unless noted, routes expect a **logged-in user** (Backstage **`httpAuth`**) and 
 
 | Parameter | Values | Applies to |
 |-----------|--------|------------|
-| **`refresh`** | `true` or omitted | All **`GET`** entity routes below. When `refresh=true`, bypasses the plugin’s **in-memory** stats/summary cache for that request. |
+| **`refresh`** | `true` or omitted | All **`GET`** entity routes below. When `refresh=true`, bypasses the plugin’s **in-memory** stats/summary cache and forces re-fetch of persisted daily-uptime rows for that request. |
 
 ### Routes
 
@@ -196,7 +197,7 @@ Unless noted, routes expect a **logged-in user** (Backstage **`httpAuth`**) and 
 | **GET** | `/entity/:kind/:namespace/:name/incidents` | User + **catalog** read | **Incidents** for the monitor (default lookback **90 days**; see [`UptimeRobotService`](./src/services/UptimeRobotService.ts)). |
 | **GET** | `/stats-cache/daily-uptime` | User + **`uptimerobot.cache.read`** | Aggregate stats for the persisted **daily uptime** cache (record counts, date range). |
 | **DELETE** | `/stats-cache/daily-uptime` | User + **`uptimerobot.cache.reset`** | Clears **all** daily uptime DB rows and in-memory entity caches. |
-| **DELETE** | `/entity/:kind/:namespace/:name/daily-uptime-cache` | User + **catalog** read **and** **`uptimerobot.cache.reset`** | Clears persisted daily uptime rows **for that entity** and in-memory entity caches. |
+| **DELETE** | `/entity/:kind/:namespace/:name/daily-uptime-cache` | User + **catalog** read **and** **`uptimerobot.cache.reset`** | Clears persisted daily uptime rows **for that entity** and that entity’s in-memory caches. |
 
 ---
 
@@ -223,19 +224,26 @@ import {
 
 If you run the **allow-all** permission policy in development, no extra rules are required.
 
----
+## Security model
+
+- **One UptimeRobot API key covers the whole Backstage deployment.** Anyone who can **write catalog annotations** on an entity they can read can point that entity at **any monitor friendly name** in the account behind `uptimerobot.apiKey`. Treat catalog writers as trusted for that entire UptimeRobot account (or use separate Backstage + key per team).
+- Entity stats require catalog **read** on the entity; cache admin routes require `uptimerobot.cache.*`.
+- `?refresh=true` is rate-limited (30s per entity) and concurrent identical loads are coalesced; daily-uptime fan-out is still expensive—do not expose this plugin to untrusted users on free API plans without additional controls.
+- Upstream UptimeRobot error bodies are **not** forwarded to clients.
+- Daily rows are scoped by **`entity_ref`** (table `uptimerobot_entity_daily_uptime`).
 
 ## Caching and database
 
 ### In-memory cache
 
 - **Keys:** Full entity stats and summary responses (per entity ref).
-- **TTL:** `uptimerobot.cacheTtlSeconds` (default **10 minutes**).
-- **Bypass:** `?refresh=true` on the corresponding **GET** request.
+- **TTL:** `uptimerobot.cacheTtlSeconds` (default **10 minutes**, max **86400**).
+- **Bypass:** `?refresh=true` on the corresponding **GET** request (cooldown **30s** per entity).
+- Monitor name resolution is cached (hits use TTL; misses use a short negative cache).
 
 ### Daily uptime table
 
-When **`graphs.dailyUptime`** is enabled, the plugin ensures a table named **`uptimerobot_daily_uptime`** exists and stores one row per monitor per UTC **day** (skipped entirely when `backend.database.migrations.skip` is `true`, consistent with other Backstage DB plugins).
+When **`graphs.dailyUptime`** is enabled, the plugin ensures a table named **`uptimerobot_entity_daily_uptime`** exists and stores one row per **entity** per UTC **day** (skipped entirely when `backend.database.migrations.skip` is `true`). Unique key is `(entity_ref, date)` so per-entity resets do not affect other entities that happen to share a monitor.
 
 **Cache admin** and **per-entity reset** are available via the [HTTP API](#http-api) and require the [permissions](#permissions) above.
 
@@ -245,12 +253,12 @@ When **`graphs.dailyUptime`** is enabled, the plugin ensures a table named **`up
 
 **`GET /health`** is intentionally **public** (no user token required) so load balancers and platform probes can use it.
 
+It is a **local configuration probe only** — it does **not** call UptimeRobot (so it cannot burn API quota or leak upstream error text).
+
 | `uptimerobot.apiKey` | Behavior |
 |----------------------|----------|
-| **Not set** | **`200`** — `{ "status": "ok", "configured": false, "detail": "..." }` (no call to UptimeRobot). |
-| **Set** | Performs a **minimal** `monitors.list` call (limit **1**). **Success:** **`200`**, `{ "status": "ok", "configured": true }`. **Failure:** **`503`**, `{ "status": "error", "configured": true, "detail": "..." }`. |
-
-Use this endpoint for **app-level** health aggregation instead of calling UptimeRobot directly from edge systems (keeps keys off untrusted paths).
+| **Not set** | **`200`** — `{ "status": "ok", "configured": false, "detail": "..." }` |
+| **Set** | **`200`** — `{ "status": "ok", "configured": true }` |
 
 ---
 

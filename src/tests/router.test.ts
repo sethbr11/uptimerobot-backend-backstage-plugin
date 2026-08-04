@@ -24,7 +24,7 @@ function sampleStats() {
     uptime: {
       last24Hours: 100,
       last7Days: 99.9,
-      last30Days: 99.5,
+      chartWindow: 99.5,
       last90Days: 99,
     },
     dailyUptime: [],

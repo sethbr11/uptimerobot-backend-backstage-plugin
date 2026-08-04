@@ -84,7 +84,7 @@ type BasicMonitor = {
  * 
  * @property last24Hours - The uptime in the last 24 hours
  * @property last7Days - The uptime in the last 7 days
- * @property last30Days - The uptime in the last 30 days
+ * @property chartWindow - Uptime over `display.dailyUptimeDays` (configurable chart window)
  * @property last90Days - The uptime in the last 90 days
  * 
  * @internal
@@ -92,7 +92,7 @@ type BasicMonitor = {
 type MonitorHistoryUptime = {
   last24Hours?: number;
   last7Days?: number;
-  last30Days?: number;
+  chartWindow?: number;
   last90Days?: number;
 };
 

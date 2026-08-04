@@ -353,7 +353,7 @@ export async function createRouter({ httpAuth, permissions, uptimeRobot }: {
       [{ permission: catalogEntityReadPermission, resourceRef: entityRef }],
       { credentials },
     );
-    if (result === AuthorizeResult.DENY) {
+    if (result !== AuthorizeResult.ALLOW) {
       throw new NotAllowedError(`Not allowed to read catalog entity ${entityRef}`);
     }
     return credentials;
@@ -370,7 +370,7 @@ export async function createRouter({ httpAuth, permissions, uptimeRobot }: {
       [{ permission: uptimerobotCacheReadPermission }],
       { credentials },
     );
-    if (result === AuthorizeResult.DENY) {
+    if (result !== AuthorizeResult.ALLOW) {
       throw new NotAllowedError('Not allowed to read UptimeRobot cache statistics');
     }
     return credentials;
@@ -387,7 +387,7 @@ export async function createRouter({ httpAuth, permissions, uptimeRobot }: {
       [{ permission: uptimerobotCacheResetPermission }],
       { credentials },
     );
-    if (result === AuthorizeResult.DENY) {
+    if (result !== AuthorizeResult.ALLOW) {
       throw new NotAllowedError('Not allowed to reset UptimeRobot caches');
     }
     return credentials;
