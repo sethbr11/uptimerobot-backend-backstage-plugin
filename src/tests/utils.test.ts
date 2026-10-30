@@ -1,13 +1,26 @@
 import type { PluginRuntimeConfig } from '../readPluginConfig';
 import type { Incident } from 'uptime-robot-v3';
 import {
+  UPTIMEROBOT_DASHBOARD_MONITORS_BASE_URL,
   buildRelativeIsoDate,
   getStatusLabel,
   getUptimeRatio,
   parseNextMonitorListCursor,
   toBasicIncident,
   toGraphDisplay,
+  uptimeRobotDashboardMonitorUrl,
 } from '../services/utils';
+
+describe('uptimeRobotDashboardMonitorUrl', () => {
+  it('builds the dashboard deep link from a monitor id', () => {
+    expect(uptimeRobotDashboardMonitorUrl(42)).toBe(
+      `${UPTIMEROBOT_DASHBOARD_MONITORS_BASE_URL}/42`,
+    );
+    expect(uptimeRobotDashboardMonitorUrl('99')).toBe(
+      `${UPTIMEROBOT_DASHBOARD_MONITORS_BASE_URL}/99`,
+    );
+  });
+});
 
 describe('parseNextMonitorListCursor', () => {
   it('returns undefined for empty, null, or literal null', () => {

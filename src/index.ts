@@ -9,6 +9,10 @@ export {
   uptimerobotCacheResetEntityPermission,
   uptimerobotPermissions,
 } from './permissions';
+export {
+  UPTIMEROBOT_DASHBOARD_MONITORS_BASE_URL,
+  uptimeRobotDashboardMonitorUrl,
+} from './services/utils';
 export type {
   DailyUptime,
   GraphDisplay,

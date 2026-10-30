@@ -12,7 +12,7 @@ import { resolveMonitorNameFromEntity } from './catalogProcessor';
 import { type DailyUptimeCacheIdentity, type DailyUptimeCacheStats, DailyUptimeStore } from './dailyUptimeStore';
 import { callUptimeRobot, UptimeRobotHttpError } from './httpClient';
 import { INCIDENT_LOOKBACK_DAYS, buildRelativeIsoDate, getStatusLabel, getUptimeRatio,
-  parseNextMonitorListCursor, toGraphDisplay, toBasicIncident } from './utils';
+  parseNextMonitorListCursor, toGraphDisplay, toBasicIncident, uptimeRobotDashboardMonitorUrl } from './utils';
 
 // ////////////////////////////////////////////
 //            TYPES AND CONSTANTS            //
@@ -367,10 +367,14 @@ export class UptimeRobotService {
     return resolveMonitorNameFromEntity(entity, this.#runtime.annotations);
   }
 
-  /** Optional `https?://...` URL from catalog for the card subheader link (never UptimeRobot's healthcheck URL)
-   * 
+  /**
+   * Optional catalog override for the card subheader link.
+   *
+   * Never returns UptimeRobot's healthcheck URL. When missing or invalid, the
+   * summary builder falls back to {@link uptimeRobotDashboardMonitorUrl}.
+   *
    * @param entity - The entity
-   * @returns The monitor URL for the entity
+   * @returns Absolute http(s) URL, or undefined to use the dashboard default
    */
   #resolveMonitorUrlFromEntity(entity: Entity): string | undefined {
     // Get the monitor URL from the entity annotations
@@ -576,7 +580,8 @@ export class UptimeRobotService {
       monitor: {
         id: String(monitor.id),
         name: monitor.friendlyName,
-        ...(monitorUrlOverride ? { url: monitorUrlOverride } : {}),
+        // Annotation override wins; otherwise link the name to the UptimeRobot dashboard monitor page.
+        url: monitorUrlOverride ?? uptimeRobotDashboardMonitorUrl(monitor.id),
         status: getStatusLabel(monitor.status),
       },
       uptime: {

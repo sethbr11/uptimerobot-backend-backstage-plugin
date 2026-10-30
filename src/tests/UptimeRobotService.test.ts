@@ -478,6 +478,39 @@ describe('UptimeRobotService entity resolution and health', () => {
     ]);
   });
 
+  it('defaults monitor URL to the UptimeRobot dashboard page for the monitor id', async () => {
+    const config = new ConfigReader({
+      uptimerobot: {
+        apiKey: 'k',
+        graphs: { dailyUptime: { enabled: false }, responseTime: { enabled: false } },
+      },
+    });
+    const { database } = createInMemoryDatabaseService();
+    const catalog = {
+      getEntityByRef: jest.fn().mockResolvedValue({
+        apiVersion: 'backstage.io/v1alpha1',
+        kind: 'Component',
+        metadata: {
+          namespace: 'default',
+          name: 'demo',
+          annotations: {
+            'backstage.io/uptimerobot': 'Demo',
+          },
+        },
+      }),
+    } as unknown as Parameters<typeof UptimeRobotService.create>[0]['catalog'];
+
+    mockMonitorList.mockResolvedValue({
+      data: [{ id: 99, friendlyName: 'Demo', status: 'UP', url: 'https://health.example/check' }],
+      nextLink: null,
+    });
+    mockGetUptimeStatistics.mockResolvedValue({ uptime: 100 });
+
+    const service = UptimeRobotService.create({ catalog, config, database, logger });
+    const summary = await service.getStatsSummaryForEntity('component:default/demo', { credentials });
+    expect(summary.monitor.url).toBe('https://dashboard.uptimerobot.com/monitors/99');
+  });
+
   it('includes normalized monitor URL from catalog annotation', async () => {
     const config = new ConfigReader({
       uptimerobot: {
@@ -512,7 +545,7 @@ describe('UptimeRobotService entity resolution and health', () => {
     expect(summary.monitor.url).toBe('https://example.com/path/');
   });
 
-  it('ignores monitor URL annotation without http(s) scheme', async () => {
+  it('ignores monitor URL annotation without http(s) scheme and falls back to the dashboard URL', async () => {
     const config = new ConfigReader({
       uptimerobot: {
         apiKey: 'k',
@@ -543,7 +576,7 @@ describe('UptimeRobotService entity resolution and health', () => {
 
     const service = UptimeRobotService.create({ catalog, config, database, logger });
     const summary = await service.getStatsSummaryForEntity('component:default/demo', { credentials });
-    expect(summary.monitor.url).toBeUndefined();
+    expect(summary.monitor.url).toBe('https://dashboard.uptimerobot.com/monitors/1');
     expect(logger.warn).toHaveBeenCalled();
   });
 

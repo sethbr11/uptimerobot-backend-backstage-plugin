@@ -9,9 +9,26 @@ import type { GraphDisplay, BasicIncident } from '../types';
 /** Card only needs recent downtime; narrower window keeps the incidents request smaller. */
 export const INCIDENT_LOOKBACK_DAYS = 90;
 
+/** UptimeRobot dashboard list / monitor deep-link base (entity card default). */
+export const UPTIMEROBOT_DASHBOARD_MONITORS_BASE_URL =
+  'https://dashboard.uptimerobot.com/monitors';
+
 // ////////////////////////////////////////////
 //            EXPORTED UTILITIES             //
 // ////////////////////////////////////////////
+
+/**
+ * Deep link to a single monitor in the UptimeRobot dashboard.
+ *
+ * Used as the entity-card subheader href when
+ * `backstage.io/uptimerobot-monitor-url` is absent or invalid. Never uses the
+ * monitor's healthcheck URL.
+ *
+ * @param monitorId - UptimeRobot monitor id from the API.
+ */
+export function uptimeRobotDashboardMonitorUrl(monitorId: string | number): string {
+  return `${UPTIMEROBOT_DASHBOARD_MONITORS_BASE_URL}/${monitorId}`;
+}
 
 /** Parse the next monitor list cursor from the next link
  * 

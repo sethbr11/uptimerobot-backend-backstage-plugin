@@ -163,13 +163,17 @@ import {
 } from '@sethbr11/plugin-uptimerobot-backend';
 ```
 
-### Optional card link URL
+### Card link URL
 
-**Annotation:** `backstage.io/uptimerobot-monitor-url` (see `UPTIMEROBOT_MONITOR_URL_ANNOTATION`)
+By default, the entity card links the monitor name to the UptimeRobot dashboard
+page for that monitor (`https://dashboard.uptimerobot.com/monitors/{id}`). The
+monitor's healthcheck URL is never used as the card href.
 
-- **Purpose:** Override the **clickable URL** shown with the monitor on the entity card (e.g. link to your service dashboard).
+**Optional override annotation:** `backstage.io/uptimerobot-monitor-url` (see `UPTIMEROBOT_MONITOR_URL_ANNOTATION`)
+
+- **Purpose:** Replace the default dashboard link (e.g. with your own status page).
 - **Must** be an absolute URL whose scheme is **`http://`** or **`https://`** after trim.
-- Invalid or non-HTTP(S) values are ignored and a **warning** is logged; the card falls back to default presentation.
+- Invalid or non-HTTP(S) values are ignored and a **warning** is logged; the card falls back to the dashboard monitor URL.
 
 ---
 
@@ -306,6 +310,7 @@ Published **`main`** / **`types`** point at the built **`dist/`** output. Source
 | **default** | `uptimerobotBackendPlugin` — `backend.add(...)` entrypoint. |
 | **`uptimerobotCacheReadPermission`**, **`uptimerobotCacheResetPermission`**, **`uptimerobotCacheResetEntityPermission`**, **`uptimerobotPermissions`** | Permission definitions. |
 | **`UPTIMEROBOT_DEFAULT_ENTITY_ANNOTATION`**, **`UPTIMEROBOT_MONITOR_URL_ANNOTATION`** | Default annotation keys. |
+| **`UPTIMEROBOT_DASHBOARD_MONITORS_BASE_URL`**, **`uptimeRobotDashboardMonitorUrl`** | Default entity-card link to a monitor's UptimeRobot dashboard page. |
 | **Types** | `DailyUptime`, `GraphDisplay`, `BasicIncident`, `MonitorStats`, `MonitorSummaryStats`, `ResponseTimeChart`, `ResponseTimePoint` — JSON shapes returned by the service / API. |
 
 ---
