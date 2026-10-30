@@ -11,6 +11,10 @@
 export const UPTIMEROBOT_DEFAULT_ENTITY_ANNOTATION = 'backstage.io/uptimerobot';
 
 /**
- * Optional absolute URL for the monitor name link on the entity card (UptimeRobot's monitored URL is not used).
+ * Optional absolute URL for the monitor name link on the entity card.
+ *
+ * When absent or invalid, the backend defaults the card link to the UptimeRobot
+ * dashboard page for the resolved monitor id. UptimeRobot's healthcheck URL is
+ * never used as the card href.
  */
 export const UPTIMEROBOT_MONITOR_URL_ANNOTATION = 'backstage.io/uptimerobot-monitor-url';
